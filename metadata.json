@@ -1,0 +1,6 @@
+{
+  "name": "Tournament Arena",
+  "description": "Real-money esports tournament platform for mobile gamers with live matchmaking, wallet management, and leaderboard tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
