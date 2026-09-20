@@ -22,8 +22,16 @@ export const TournamentDetailsModal: React.FC<TournamentDetailsModalProps> = ({
 
   if (!isOpen || !tournament) return null;
 
-  const isJoined = currentUser && tournament.registeredPlayers && !!tournament.registeredPlayers[currentUser.uid];
-  const registeredCount = tournament.registeredPlayers ? Object.keys(tournament.registeredPlayers).length : 0;
+  const isJoined = currentUser && tournament.registeredPlayers && !!(
+    Array.isArray(tournament.registeredPlayers)
+      ? tournament.registeredPlayers.some((p: any) => p?.uid === currentUser.uid || p?.userId === currentUser.uid)
+      : (tournament.registeredPlayers as Record<string, any>)[currentUser.uid]
+  );
+  const registeredCount = tournament.registeredPlayers
+    ? Array.isArray(tournament.registeredPlayers)
+      ? tournament.registeredPlayers.length
+      : Object.keys(tournament.registeredPlayers).length
+    : 0;
   const isFull = registeredCount >= tournament.maxPlayers;
   const isDuo = (tournament.mode || '').toLowerCase().includes('duo');
   const totalFee = tournament.entryFee * (isDuo ? 2 : 1);
@@ -58,7 +66,7 @@ export const TournamentDetailsModal: React.FC<TournamentDetailsModalProps> = ({
           {Object.entries(tournament.prizeDistribution).map(([rank, prize]) => (
             <div key={rank} className="flex items-center justify-between p-2.5 bg-[#0F172A] rounded-xl border border-slate-800 text-xs">
               <span className="font-semibold text-slate-300">Rank {rank}</span>
-              <span className="font-bold text-[#B6FF3C]">₹{prize}</span>
+              <span className="font-bold text-[#B6FF3C]">₹{String(prize)}</span>
             </div>
           ))}
         </div>

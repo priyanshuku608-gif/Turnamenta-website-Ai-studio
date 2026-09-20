@@ -1,6 +1,6 @@
 {
-  "name": "Tournament Arena",
-  "description": "Real-money esports tournament platform for mobile gamers with live matchmaking, wallet management, and leaderboard tracking.",
+  "name": "BattlePro - Esports Tournament Arena",
+  "description": "Esports tournament platform for real cash matches, player wallets, rankings, and administrative management.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

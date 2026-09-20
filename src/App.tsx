@@ -1,204 +1,143 @@
-import React, { useState, useEffect } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { TournamentProvider, useTournament } from './context/TournamentContext';
+import React, { useState } from 'react';
+import { AuthProvider } from './context/AuthContext';
+import { TournamentProvider } from './context/TournamentContext';
+import { TabType, Tournament, Game } from './types';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { HomeScreen } from './components/Home/HomeScreen';
+import { GameTournamentsScreen } from './components/Game/GameTournamentsScreen';
 import { WalletScreen } from './components/Wallet/WalletScreen';
 import { LeaderboardScreen } from './components/Leaderboard/LeaderboardScreen';
 import { ProfileScreen } from './components/Profile/ProfileScreen';
+import { SplashScreen } from './components/SplashScreen';
+import { AuthModal } from './components/AuthModal';
+import { NotificationsModal } from './components/NotificationsModal';
+import { ReferralPromptModal } from './components/ReferralPromptModal';
 import { TournamentDetailsModal } from './components/Tournament/TournamentDetailsModal';
 import { JoinTournamentModal } from './components/Tournament/JoinTournamentModal';
 import { RoomCredentialsModal } from './components/Tournament/RoomCredentialsModal';
-import { NotificationsModal } from './components/NotificationsModal';
-import { AuthModal } from './components/AuthModal';
-import { ReferralPromptModal } from './components/ReferralPromptModal';
 import { RechargeWizardModal } from './components/Wallet/RechargeWizardModal';
-import { SplashScreen } from './components/SplashScreen';
-import { TabType, Tournament } from './types';
-import { CheckCircle2 } from 'lucide-react';
 
-const MainApp: React.FC = () => {
-  const { isAuthModalOpen, showReferralPrompt } = useAuth();
-  const { selectedGameId, setSelectedGameId, games } = useTournament();
-
-  const [showSplash, setShowSplash] = useState(true);
+const UserAppContent: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('home');
+  const [activeGame, setActiveGame] = useState<Game | null>(null);
+  const [showSplash, setShowSplash] = useState(true);
+
+  // Tournament Interaction Modals
+  const [detailsTournament, setDetailsTournament] = useState<Tournament | null>(null);
+  const [joinTournamentItem, setJoinTournamentItem] = useState<Tournament | null>(null);
+  const [roomKeyTournament, setRoomKeyTournament] = useState<Tournament | null>(null);
+
+  // Secondary Global Modals
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isRechargeOpen, setIsRechargeOpen] = useState(false);
+  const [isRechargeModalOpen, setIsRechargeModalOpen] = useState(false);
 
-  // Tournament Modal States
-  const [selectedTournamentForDetails, setSelectedTournamentForDetails] = useState<Tournament | null>(null);
-  const [selectedTournamentForJoin, setSelectedTournamentForJoin] = useState<Tournament | null>(null);
-  const [selectedTournamentForRoomKey, setSelectedTournamentForRoomKey] = useState<Tournament | null>(null);
-
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
-  };
-
-  // Android System Back-button support
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      // If modal is open, close modal
-      if (selectedTournamentForDetails) {
-        setSelectedTournamentForDetails(null);
-      } else if (selectedTournamentForJoin) {
-        setSelectedTournamentForJoin(null);
-      } else if (selectedTournamentForRoomKey) {
-        setSelectedTournamentForRoomKey(null);
-      } else if (isNotificationsOpen) {
-        setIsNotificationsOpen(false);
-      } else if (isRechargeOpen) {
-        setIsRechargeOpen(false);
-      } else if (selectedGameId) {
-        setSelectedGameId(null);
-      } else if (currentTab !== 'home') {
-        setCurrentTab('home');
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [
-    selectedTournamentForDetails,
-    selectedTournamentForJoin,
-    selectedTournamentForRoomKey,
-    isNotificationsOpen,
-    isRechargeOpen,
-    selectedGameId,
-    currentTab,
-    setSelectedGameId,
-  ]);
-
-  if (showSplash) {
-    return <SplashScreen onFinish={() => setShowSplash(false)} />;
-  }
-
-  const selectedGame = games.find((g) => g.id === selectedGameId);
-
-  // Compute header title based on current screen
-  const getHeaderTitle = () => {
-    if (selectedGameId && selectedGame) {
-      return selectedGame.name;
+  const handleTabChange = (tab: TabType) => {
+    if (tab === 'home' && currentTab === 'home') {
+      // Tapping Home again returns to main Home from sub-screens
+      setActiveGame(null);
     }
-    if (currentTab === 'wallet') return 'Wallet';
-    if (currentTab === 'leaderboard') return 'Leaderboard';
-    if (currentTab === 'profile') return 'Profile';
-    return undefined;
-  };
-
-  const showBack = (currentTab !== 'home' || !!selectedGameId);
-
-  const handleHeaderBack = () => {
-    if (selectedGameId) {
-      setSelectedGameId(null);
-    } else if (currentTab !== 'home') {
-      setCurrentTab('home');
-    }
+    setCurrentTab(tab);
   };
 
   return (
-    <div className="min-h-screen bg-[#0B1120] text-slate-100 flex justify-center selection:bg-[#B6FF3C] selection:text-black">
-      {/* Mobile Wrapper Container */}
-      <div className="w-full max-w-md min-h-screen flex flex-col bg-[#0F172A] border-x border-slate-800/80 shadow-2xl relative">
-        {/* Global Toast */}
-        {toastMessage && (
-          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-[#1E293B] border border-[#B6FF3C] px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2 text-xs font-bold text-[#B6FF3C] animate-fade-in max-w-[90%]">
-            <CheckCircle2 className="w-4 h-4 text-[#B6FF3C] shrink-0" />
-            <span className="truncate">{toastMessage}</span>
-          </div>
-        )}
+    <div className="min-h-screen bg-[#0B1120] text-slate-100 flex flex-col font-['Poppins',sans-serif] selection:bg-[#B6FF3C] selection:text-black">
+      {/* Splash Screen */}
+      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
 
-        {/* Sticky App Header */}
+      {/* Main Container - Constrained to max-w-md for mobile-first app experience */}
+      <div className="w-full max-w-md mx-auto min-h-screen flex flex-col relative bg-[#0B1120] shadow-2xl border-x border-slate-800/40">
+        {/* Global Header */}
         <Header
           currentTab={currentTab}
-          setCurrentTab={setCurrentTab}
-          title={getHeaderTitle()}
-          showBack={showBack}
-          onBack={handleHeaderBack}
+          setCurrentTab={handleTabChange}
+          showBack={currentTab === 'home' && !!activeGame}
+          onBack={() => setActiveGame(null)}
+          title={currentTab === 'home' && activeGame ? activeGame.name : undefined}
+          customIconUrl={currentTab === 'home' && activeGame ? activeGame.imageUrl : undefined}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 px-4 pt-4 overflow-y-auto">
+        {/* Tab Content */}
+        <main className="flex-1 px-4 pt-3 pb-20">
           {currentTab === 'home' && (
-            <HomeScreen
-              onDetailsClick={(t) => setSelectedTournamentForDetails(t)}
-              onJoinClick={(t) => setSelectedTournamentForJoin(t)}
-              onRoomKeyClick={(t) => setSelectedTournamentForRoomKey(t)}
-            />
+            activeGame ? (
+              <GameTournamentsScreen
+                game={activeGame}
+                onDetailsClick={(t) => setDetailsTournament(t)}
+                onJoinClick={(t) => setJoinTournamentItem(t)}
+                onRoomKeyClick={(t) => setRoomKeyTournament(t)}
+              />
+            ) : (
+              <HomeScreen
+                onSelectGame={(g) => setActiveGame(g)}
+                onDetailsClick={(t) => setDetailsTournament(t)}
+                onJoinClick={(t) => setJoinTournamentItem(t)}
+                onRoomKeyClick={(t) => setRoomKeyTournament(t)}
+              />
+            )
           )}
 
-          {currentTab === 'wallet' && (
-            <WalletScreen />
-          )}
+          {currentTab === 'wallet' && <WalletScreen />}
 
-          {currentTab === 'leaderboard' && (
-            <LeaderboardScreen />
-          )}
+          {currentTab === 'leaderboard' && <LeaderboardScreen />}
 
           {currentTab === 'profile' && (
-            <ProfileScreen
-              onRoomKeyClick={(t) => setSelectedTournamentForRoomKey(t)}
-            />
+            <ProfileScreen onRoomKeyClick={(t) => setRoomKeyTournament(t)} />
           )}
         </main>
 
-        {/* Persistent Bottom Nav */}
-        <BottomNav currentTab={currentTab} setCurrentTab={setCurrentTab} />
+        {/* Global Bottom Navigation */}
+        <BottomNav currentTab={currentTab} setCurrentTab={handleTabChange} />
 
-        {/* --- Global Modals & Sheets --- */}
-
-        {/* Tournament Details Modal */}
-        <TournamentDetailsModal
-          tournament={selectedTournamentForDetails}
-          isOpen={!!selectedTournamentForDetails}
-          onClose={() => setSelectedTournamentForDetails(null)}
-          onJoinClick={(t) => setSelectedTournamentForJoin(t)}
-          onRoomKeyClick={(t) => setSelectedTournamentForRoomKey(t)}
-        />
-
-        {/* Join Tournament Modal */}
-        <JoinTournamentModal
-          tournament={selectedTournamentForJoin}
-          isOpen={!!selectedTournamentForJoin}
-          onClose={() => setSelectedTournamentForJoin(null)}
-          onOpenRecharge={() => setIsRechargeOpen(true)}
-          onJoinedSuccess={(t) => {
-            showToast(`Successfully registered for ${t.name}!`);
-          }}
-        />
-
-        {/* Room Credentials Modal */}
-        <RoomCredentialsModal
-          tournament={selectedTournamentForRoomKey}
-          isOpen={!!selectedTournamentForRoomKey}
-          onClose={() => setSelectedTournamentForRoomKey(null)}
-        />
-
-        {/* Notifications Modal */}
+        {/* Modals & Dialogs */}
+        <AuthModal />
         <NotificationsModal
           isOpen={isNotificationsOpen}
           onClose={() => setIsNotificationsOpen(false)}
         />
+        <ReferralPromptModal />
 
-        {/* Quick Recharge Modal (triggered from Join or Header) */}
-        <RechargeWizardModal
-          isOpen={isRechargeOpen}
-          onClose={() => setIsRechargeOpen(false)}
-          onSuccess={() => {
-            showToast('Deposit request submitted! Awaiting Admin approval.');
+        {/* Tournament Modals */}
+        <TournamentDetailsModal
+          isOpen={!!detailsTournament}
+          tournament={detailsTournament}
+          onClose={() => setDetailsTournament(null)}
+          onJoinClick={(t) => {
+            setDetailsTournament(null);
+            setJoinTournamentItem(t);
+          }}
+          onRoomKeyClick={(t) => {
+            setDetailsTournament(null);
+            setRoomKeyTournament(t);
           }}
         />
 
-        {/* Authentication Modal */}
-        <AuthModal />
+        <JoinTournamentModal
+          isOpen={!!joinTournamentItem}
+          tournament={joinTournamentItem}
+          onClose={() => setJoinTournamentItem(null)}
+          onOpenRecharge={() => {
+            setJoinTournamentItem(null);
+            setIsRechargeModalOpen(true);
+          }}
+          onJoinedSuccess={(t) => {
+            setJoinTournamentItem(null);
+            setDetailsTournament(t);
+          }}
+        />
 
-        {/* Referral Prompt Modal */}
-        <ReferralPromptModal />
+        <RoomCredentialsModal
+          isOpen={!!roomKeyTournament}
+          tournament={roomKeyTournament}
+          onClose={() => setRoomKeyTournament(null)}
+        />
+
+        <RechargeWizardModal
+          isOpen={isRechargeModalOpen}
+          onClose={() => setIsRechargeModalOpen(false)}
+          onSuccess={() => setIsRechargeModalOpen(false)}
+        />
       </div>
     </div>
   );
@@ -208,7 +147,7 @@ export default function App() {
   return (
     <AuthProvider>
       <TournamentProvider>
-        <MainApp />
+        <UserAppContent />
       </TournamentProvider>
     </AuthProvider>
   );

@@ -18,8 +18,16 @@ export const TournamentCard: React.FC<TournamentCardProps> = ({
 }) => {
   const { currentUser } = useAuth();
 
-  const isJoined = currentUser && tournament.registeredPlayers && !!tournament.registeredPlayers[currentUser.uid];
-  const registeredCount = tournament.registeredPlayers ? Object.keys(tournament.registeredPlayers).length : 0;
+  const isJoined = currentUser && tournament.registeredPlayers && !!(
+    Array.isArray(tournament.registeredPlayers)
+      ? tournament.registeredPlayers.some((p: any) => p?.uid === currentUser.uid || p?.userId === currentUser.uid)
+      : (tournament.registeredPlayers as Record<string, any>)[currentUser.uid]
+  );
+  const registeredCount = tournament.registeredPlayers
+    ? Array.isArray(tournament.registeredPlayers)
+      ? tournament.registeredPlayers.length
+      : Object.keys(tournament.registeredPlayers).length
+    : 0;
   const spotsLeft = Math.max(0, tournament.maxPlayers - registeredCount);
   const isFull = spotsLeft <= 0;
   const isDuo = (tournament.mode || '').toLowerCase().includes('duo');

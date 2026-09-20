@@ -25,6 +25,7 @@ import {
   LeaderboardItem,
   UserNotification
 } from '../types';
+import { apiCreatePayment, apiCheckPaymentStatus } from '../lib/paymentApi';
 
 interface TournamentContextType {
   tournaments: Tournament[];
@@ -45,8 +46,10 @@ interface TournamentContextType {
   setStatusTab: (tab: 'upcoming' | 'ongoing' | 'result') => void;
   joinTournament: (tournamentId: string, username: string, gameUid: string, teammateUsername?: string, teammateGameUid?: string) => Promise<{ success: boolean; message: string }>;
   createDepositRequest: (amount: number, paymentMethod: string, upiId: string, utr: string) => Promise<{ success: boolean; message: string; depositId?: string }>;
+  createApiPayment: (amount: number) => Promise<{ success: boolean; message: string; deposit?: Deposit; paymentUrl?: string }>;
   createWithdrawalRequest: (amount: number, methodName: string, accountInfo: string) => Promise<{ success: boolean; message: string }>;
   markNotificationsAsRead: () => void;
+  activePendingApiDeposit: Deposit | null;
 }
 
 const defaultSettings: AppSettings = {
@@ -56,12 +59,17 @@ const defaultSettings: AppSettings = {
   signupBonus: 10,
   supportContact: 'support@battlepro.app',
   telegramLink: 'https://t.me/battlepro_support',
-  upiDetails: 'battlepro@upi',
+  upiId: 'battlepro@upi',
+  upiDetails: {
+    upiId: 'battlepro@upi',
+    qrCodeUrl: '',
+    accountName: 'BattlePro Admin',
+  },
   qrCodeUrl: '',
-  policyPrivacy: 'We value your privacy. Your information is encrypted and never shared.',
-  policyTerms: 'By playing, you agree to fair play rules and terms of Tournament Arena.',
-  policyRefund: 'Refunds are granted if a match is cancelled by the administrator.',
-  policyFairPlay: 'Cheating, hacking, or using third-party tools will result in a permanent ban.',
+  privacyPolicy: 'We value your privacy. Your information is encrypted and never shared.',
+  termsConditions: 'By playing, you agree to fair play rules and terms of Tournament Arena.',
+  refundPolicy: 'Refunds are granted if a match is cancelled by the administrator.',
+  fairPlayPolicy: 'Cheating, hacking, or using third-party tools will result in a permanent ban.',
 };
 
 const TournamentContext = createContext<TournamentContextType | null>(null);
@@ -187,6 +195,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           title: item.title || 'Notification',
           message: item.message || '',
           type: item.type || 'info',
+          createdAt: item.createdAt || item.timestamp || Date.now(),
           timestamp: item.timestamp || Date.now(),
         }));
         setGlobalNotifications(list);
@@ -206,14 +215,23 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const unsubscribeLeaderboard = onValue(leaderboardRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const list: LeaderboardItem[] = Object.entries(data).map(([uid, item]: [string, any]) => ({
-          uid,
-          displayName: item.displayName || item.name || 'Player',
-          totalEarnings: Number(item.totalEarnings || item.winnings || item.amount || 0),
-          wonMatches: item.wonMatches || item.wins || 0,
-          totalMatches: item.totalMatches || 0,
-          photoURL: item.photoURL || '',
-        }));
+        const list: LeaderboardItem[] = Object.entries(data).map(([uid, item]: [string, any]) => {
+          const earnVal = Number(
+            item.leaderboardDisplayEarnings !== undefined && item.leaderboardDisplayEarnings !== null && item.leaderboardDisplayEarnings !== ''
+              ? item.leaderboardDisplayEarnings
+              : item.earnings || item.totalEarnings || item.winnings || item.amount || 0
+          );
+          return {
+            uid,
+            displayName: item.displayName || item.name || 'Player',
+            earnings: earnVal,
+            totalEarnings: earnVal,
+            leaderboardRank: item.leaderboardRank,
+            wonMatches: item.wonMatches || item.wins || 0,
+            totalMatches: item.totalMatches || 0,
+            photoURL: item.photoURL || '',
+          };
+        });
         setRawLeaderboard(list);
       } else {
         setRawLeaderboard([]);
@@ -224,14 +242,23 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const unsubscribeUsers = onValue(usersRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const list: LeaderboardItem[] = Object.entries(data).map(([uid, item]: [string, any]) => ({
-          uid,
-          displayName: item.displayName || item.username || 'Player',
-          totalEarnings: Number(item.totalEarnings || item.winningCash || 0),
-          wonMatches: item.wonMatches || 0,
-          totalMatches: item.totalMatches || 0,
-          photoURL: item.photoURL || '',
-        }));
+        const list: LeaderboardItem[] = Object.entries(data).map(([uid, item]: [string, any]) => {
+          const earnVal = Number(
+            item.leaderboardDisplayEarnings !== undefined && item.leaderboardDisplayEarnings !== null && item.leaderboardDisplayEarnings !== ''
+              ? item.leaderboardDisplayEarnings
+              : item.totalEarnings || item.winningCash || item.earnings || 0
+          );
+          return {
+            uid,
+            displayName: item.displayName || item.username || 'Player',
+            earnings: earnVal,
+            totalEarnings: earnVal,
+            leaderboardRank: item.leaderboardRank,
+            wonMatches: item.wonMatches || 0,
+            totalMatches: item.totalMatches || 0,
+            photoURL: item.photoURL || '',
+          };
+        });
         setAllUsersList(list);
       }
     }, (err) => console.warn("Users for leaderboard err:", err));
@@ -245,10 +272,19 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   // Compute final sorted Leaderboard
   const leaderboard = useMemo(() => {
     const source = rawLeaderboard.length > 0 ? rawLeaderboard : allUsersList;
-    const sorted = [...source].sort((a, b) => (b.totalEarnings || 0) - (a.totalEarnings || 0));
+    const sorted = [...source].sort((a, b) => {
+      const rankA = a.leaderboardRank !== undefined && a.leaderboardRank !== null ? Number(a.leaderboardRank) : null;
+      const rankB = b.leaderboardRank !== undefined && b.leaderboardRank !== null ? Number(b.leaderboardRank) : null;
+      if (rankA !== null && rankB !== null) {
+        return rankA - rankB;
+      }
+      if (rankA !== null) return -1;
+      if (rankB !== null) return 1;
+      return (b.earnings || b.totalEarnings || 0) - (a.earnings || a.totalEarnings || 0);
+    });
     return sorted.map((item, index) => ({
       ...item,
-      rank: index + 1,
+      rank: item.leaderboardRank ? Number(item.leaderboardRank) : index + 1,
     }));
   }, [rawLeaderboard, allUsersList]);
 
@@ -270,7 +306,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           id,
         }));
         // sort newest first
-        list.sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+        list.sort((a, b) => Number(b.timestamp || b.createdAt || 0) - Number(a.timestamp || a.createdAt || 0));
         setDeposits(list);
       } else {
         setDeposits([]);
@@ -286,7 +322,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           ...item,
           id,
         }));
-        list.sort((a, b) => Number(b.requestTimestamp) - Number(a.requestTimestamp));
+        list.sort((a, b) => Number(b.requestTimestamp || b.createdAt || 0) - Number(a.requestTimestamp || a.createdAt || 0));
         setWithdrawals(list);
       } else {
         setWithdrawals([]);
@@ -301,20 +337,21 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Combine User Notifications
   const notifications = useMemo(() => {
-    const userNotifs = userProfile?.notifications 
-      ? Object.entries(userProfile.notifications).map(([id, item]) => ({
+    const userNotifs: UserNotification[] = (userProfile?.notifications && typeof userProfile.notifications === 'object')
+      ? Object.entries(userProfile.notifications).map(([id, item]: [string, any]) => ({
           ...item,
           id,
+          createdAt: item.createdAt || item.timestamp || Date.now(),
         }))
       : [];
     const combined = [...globalNotifications, ...userNotifs];
-    combined.sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
+    combined.sort((a, b) => Number(b.timestamp || b.createdAt || 0) - Number(a.timestamp || a.createdAt || 0));
     return combined;
   }, [globalNotifications, userProfile?.notifications]);
 
   const unreadNotificationCount = useMemo(() => {
     const lastChecked = Number(userProfile?.lastCheckedNotifications) || 0;
-    return notifications.filter(n => Number(n.timestamp) > lastChecked).length;
+    return notifications.filter(n => Number(n.timestamp || n.createdAt || 0) > lastChecked).length;
   }, [notifications, userProfile?.lastCheckedNotifications]);
 
   const markNotificationsAsRead = async () => {
@@ -330,30 +367,177 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const items: TransactionRecord[] = [];
     
     deposits.forEach(d => {
+      const isApi = d.type === 'api' || d.paymentMethod === 'api';
+      const desc = isApi
+        ? `API Deposit ${d.transactionid ? `(ID: ${d.transactionid})` : ''} ${d.utr ? `UTR: ${d.utr}` : ''}`.trim()
+        : `Deposit via ${(d.paymentMethod || 'UPI').toUpperCase()} (UTR: ${d.utr || d.utrNumber || 'N/A'})`;
+
       items.push({
         id: d.id,
-        type: 'Deposit',
+        userId: d.userId,
+        type: isApi ? 'API Deposit' : 'Deposit',
         amount: d.amount,
-        timestamp: d.timestamp,
+        timestamp: d.timestamp || d.createdAt || d.submittedAt || Date.now(),
         status: d.status,
-        description: `Deposit via ${d.paymentMethod.toUpperCase()} (UTR: ${d.utr})`,
+        description: desc,
+        uniqueid: d.uniqueid,
+        transactionid: d.transactionid || d.transactionId,
+        utr: d.utr || d.utrNumber,
+        paymentMethod: d.paymentMethod || (isApi ? 'API' : 'UPI'),
       });
     });
 
     withdrawals.forEach(w => {
       items.push({
         id: w.id,
+        userId: w.userId,
         type: 'Withdrawal',
         amount: w.amount,
-        timestamp: w.requestTimestamp,
+        timestamp: w.requestTimestamp || w.createdAt || Date.now(),
         status: w.status,
-        description: `Payout to ${w.methodDetails?.methodName || 'Account'} (${w.methodDetails?.accountInfo || ''})`,
+        description: `Payout to ${w.methodDetails?.methodName || w.paymentMethod || 'Account'} (${w.methodDetails?.accountInfo || w.paymentDetails || ''})`,
+        paymentMethod: w.paymentMethod,
+        accountDetails: w.accountDetails || w.paymentDetails,
       });
     });
 
     items.sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
     return items;
   }, [deposits, withdrawals]);
+
+  // Active Pending API Deposit (single in-flight API payment for current user)
+  const activePendingApiDeposit = useMemo(() => {
+    if (!currentUser) return null;
+    return (
+      deposits.find(
+        (d) =>
+          d.userId === currentUser.uid &&
+          (d.type === 'api' || d.paymentMethod === 'api') &&
+          d.status === 'pending'
+      ) || null
+    );
+  }, [currentUser, deposits]);
+
+  // Process API Deposit Status when polling check returns result
+  const processApiDepositStatus = async (deposit: Deposit, statusData: any) => {
+    const depositId = deposit.id;
+    const status = statusData.status;
+
+    if (status === 'success') {
+      try {
+        const depositRef = ref(db, `deposits/${depositId}`);
+        const result = await runTransaction(depositRef, (current) => {
+          if (!current) return current; // record missing — abort
+          if (current.walletCredited === true) return; // already credited — abort transaction (undefined = abort)
+          current.walletCredited = true; // claim credit atomically
+          current.status = 'success';
+          current.provider_transaction_id =
+            statusData.provider_transaction_id ?? current.provider_transaction_id ?? null;
+          current.utr = statusData.utr ?? current.utr ?? null;
+          current.updated_at = statusData.updated_at ?? current.updated_at ?? null;
+          return current;
+        });
+
+        if (result.committed && result.snapshot.val()?.walletCredited === true) {
+          // Won the race — credit the user's wallet
+          const uid = deposit.userId;
+          const userSnap = await get(ref(db, `users/${uid}`));
+          const userData = userSnap.val() || {};
+
+          const currentDeposit = Number(userData.depositBalance) || 0;
+          const currentWinning = Number(userData.winningCash) || 0;
+          const currentBonus = Number(userData.bonusCash) || 0;
+          const depositAmount = Number(deposit.amount);
+
+          const newDepositBalance = currentDeposit + depositAmount;
+          const newBalance = newDepositBalance + currentWinning + currentBonus;
+
+          const txRef = push(ref(db, `transactions/${uid}`));
+          const txKey = txRef.key;
+
+          const multiUpdates: Record<string, any> = {
+            [`users/${uid}/depositBalance`]: newDepositBalance,
+            [`users/${uid}/balance`]: newBalance,
+            [`users/${uid}/updatedAt`]: Date.now(),
+            [`transactions/${uid}/${txKey}`]: {
+              userId: uid,
+              userEmail: deposit.userEmail || userData.email || '',
+              type: 'deposit',
+              amount: depositAmount,
+              isCredit: true,
+              status: 'completed',
+              description: `API Deposit credited (TxID: ${statusData.transactionid || deposit.transactionid || 'N/A'}, UTR: ${statusData.utr || 'N/A'})`,
+              balanceAfter: newBalance,
+              timestamp: Date.now(),
+              uniqueid: deposit.uniqueid,
+              transactionid: statusData.transactionid || deposit.transactionid,
+              provider_transaction_id: statusData.provider_transaction_id,
+              utr: statusData.utr,
+            },
+          };
+
+          await update(ref(db), multiUpdates);
+
+          // User notification
+          const notifKey = `api_dep_${Date.now()}`;
+          await set(ref(db, `users/${uid}/notifications/${notifKey}`), {
+            title: 'Recharge Successful!',
+            message: `₹${depositAmount} has been credited to your deposit balance via Instant API Payment.`,
+            type: 'deposit_success',
+            timestamp: Date.now(),
+            createdAt: Date.now(),
+          });
+        }
+      } catch (err) {
+        console.error('Error in atomic wallet credit for deposit:', depositId, err);
+      }
+    } else if (status === 'expired') {
+      try {
+        await update(ref(db, `deposits/${depositId}`), {
+          status: 'expired',
+          updated_at: statusData.updated_at || new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error('Error marking deposit as expired:', depositId, err);
+      }
+    }
+  };
+
+  // Polling loop effect: single loop, every 3 seconds for active pending API deposit
+  useEffect(() => {
+    if (
+      !activePendingApiDeposit ||
+      !activePendingApiDeposit.uniqueid ||
+      activePendingApiDeposit.status !== 'pending'
+    ) {
+      return;
+    }
+
+    const uniqueid = activePendingApiDeposit.uniqueid;
+    let isMounted = true;
+
+    const checkStatus = async () => {
+      try {
+        const data = await apiCheckPaymentStatus(uniqueid);
+        if (!isMounted || !data) return;
+
+        if (data.status === 'success' || data.status === 'expired') {
+          await processApiDepositStatus(activePendingApiDeposit, data);
+        }
+      } catch (err) {
+        console.warn('Payment status polling check notice:', err);
+      }
+    };
+
+    // Initial check right away, then interval every 3 seconds
+    checkStatus();
+    const interval = setInterval(checkStatus, 3000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [activePendingApiDeposit]);
 
   // JOIN TOURNAMENT WITH TWO-PHASE TRANSACTION & REFUND LOGIC
   const joinTournament = async (
@@ -382,11 +566,22 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const totalFee = tourney.entryFee * (isDuo ? 2 : 1);
 
     // Check if already registered
-    if (tourney.registeredPlayers && tourney.registeredPlayers[currentUser.uid]) {
+    const isAlreadyReg = tourney.registeredPlayers && (
+      Array.isArray(tourney.registeredPlayers)
+        ? tourney.registeredPlayers.some((p: any) => p?.uid === currentUser.uid || p?.userId === currentUser.uid)
+        : !!(tourney.registeredPlayers as Record<string, any>)[currentUser.uid]
+    );
+
+    if (isAlreadyReg) {
       return { success: false, message: 'You have already joined this tournament' };
     }
 
-    const currentRegisteredCount = tourney.registeredPlayers ? Object.keys(tourney.registeredPlayers).length : 0;
+    const currentRegisteredCount = tourney.registeredPlayers
+      ? Array.isArray(tourney.registeredPlayers)
+        ? tourney.registeredPlayers.length
+        : Object.keys(tourney.registeredPlayers).length
+      : 0;
+
     if (currentRegisteredCount >= tourney.maxPlayers) {
       return { success: false, message: 'Tournament is full' };
     }
@@ -403,13 +598,9 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       };
     }
 
-    // Determine exact deduction split: depositBalance first, then winningCash
-    let deductFromDeposit = Math.min(depositBal, totalFee);
-    let deductFromWinning = totalFee - deductFromDeposit;
-
-    let walletDebited = false;
     let actualDeductedDeposit = 0;
     let actualDeductedWinning = 0;
+    let walletDebited = false;
 
     // STEP 1: Debit Wallet via atomic transaction on users/{uid}
     const userRef = ref(db, `users/${currentUser.uid}`);
@@ -455,6 +646,8 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     const tourneyRegRef = ref(db, `tournaments/${tournamentId}/registeredPlayers/${currentUser.uid}`);
     try {
       const playerPayload = {
+        userId: currentUser.uid,
+        uid: currentUser.uid,
         joinedAt: Date.now(),
         username,
         gameUid,
@@ -475,6 +668,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         message: `You successfully registered for "${tourney.name}". Check Room ID & Password 15 min before match start.`,
         type: 'match_start',
         timestamp: Date.now(),
+        createdAt: Date.now(),
       });
 
       return { 
@@ -539,10 +733,11 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         userName: userProfile.displayName || currentUser.displayName || 'Player',
         amount,
         paymentMethod,
-        upiId: upiId || settings.upiDetails || '',
         utr: utr.trim(),
+        utrNumber: utr.trim(),
         status: 'pending', // NEVER mark as success client-side (admin approves)
-        timestamp: Date.now(),
+        submittedAt: Date.now(),
+        createdAt: Date.now(),
       };
 
       await set(newDepositRef, depositData);
@@ -554,6 +749,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         message: `Your deposit request of ₹${amount.toFixed(2)} with UTR: ${utr.trim()} has been submitted. Admin will approve within 10-30 minutes.`,
         type: 'deposit',
         timestamp: Date.now(),
+        createdAt: Date.now(),
       });
 
       return { 
@@ -567,6 +763,102 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   };
 
+  // CREATE API PAYMENT (Instant Gateway flow)
+  const createApiPayment = async (
+    amount: number
+  ): Promise<{ success: boolean; message: string; deposit?: Deposit; paymentUrl?: string }> => {
+    if (!currentUser || !userProfile) {
+      return { success: false, message: 'Please sign in to recharge your wallet' };
+    }
+
+    if (amount < 10 || amount > 1000) {
+      return { success: false, message: 'Recharge amount must be between ₹10 and ₹1000' };
+    }
+
+    // Check if there is already an active pending API deposit for this user (Resilience §14)
+    const existingPending = deposits.find(
+      (d) =>
+        d.userId === currentUser.uid &&
+        (d.type === 'api' || d.paymentMethod === 'api') &&
+        d.status === 'pending'
+    );
+    if (existingPending && existingPending.uniqueid) {
+      return {
+        success: true,
+        message: 'Resuming active pending payment...',
+        deposit: existingPending,
+        paymentUrl: existingPending.payment_url,
+      };
+    }
+
+    try {
+      // 1. Generate unique alphanumeric ID (6-8 chars)
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let uniqueid = '';
+      for (let i = 0; i < 6; i++) {
+        uniqueid += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      const depositsRef = ref(db, 'deposits');
+      const newDepositRef = push(depositsRef);
+      const depositId = newDepositRef.key || `dep_api_${Date.now()}`;
+
+      // 2. Initial pending record in Realtime Database
+      const initialDepositData: Deposit = {
+        id: depositId,
+        userId: currentUser.uid,
+        userEmail: currentUser.email || userProfile.email || '',
+        userName: userProfile.displayName || currentUser.displayName || 'Player',
+        amount,
+        type: 'api',
+        paymentMethod: 'api',
+        uniqueid,
+        status: 'pending',
+        walletCredited: false,
+        createdAt: Date.now(),
+        submittedAt: Date.now(),
+      };
+
+      await set(newDepositRef, initialDepositData);
+
+      // 3. Call CREATE PAYMENT API via robust client proxy & fallback
+      const data = await apiCreatePayment(amount, uniqueid);
+
+      if (!data || !data.success || !data.payment_url) {
+        throw new Error(data?.message || 'Payment gateway failed to initialize checkout link');
+      }
+
+      // 4. Update deposit with transactionid, payment_url, created_at, expires_at
+      const updates: Partial<Deposit> = {
+        transactionid: data.transactionid || '',
+        payment_url: data.payment_url,
+        created_at: data.created_at || new Date().toISOString(),
+        expires_at: data.expires_at || '',
+        status: data.status || 'pending',
+      };
+
+      await update(ref(db, `deposits/${depositId}`), updates);
+
+      const fullDeposit: Deposit = {
+        ...initialDepositData,
+        ...updates,
+      };
+
+      return {
+        success: true,
+        message: 'Payment checkout link generated successfully!',
+        deposit: fullDeposit,
+        paymentUrl: data.payment_url,
+      };
+    } catch (err: any) {
+      console.error('Error creating API payment:', err);
+      return {
+        success: false,
+        message: err.message || 'Could not connect to payment gateway',
+      };
+    }
+  };
+
   // CREATE WITHDRAWAL REQUEST
   const createWithdrawalRequest = async (
     amount: number, 
@@ -577,7 +869,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       return { success: false, message: 'Please sign in to withdraw funds' };
     }
 
-    const minWithdraw = Number(settings.minWithdraw) || 50;
+    const minWithdraw = Number(settings.minWithdraw || settings.minWithdrawal) || 50;
     if (amount < minWithdraw) {
       return { success: false, message: `Minimum withdrawal amount is ₹${minWithdraw}` };
     }
@@ -625,12 +917,11 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         userName: userProfile.displayName || currentUser.displayName || 'Player',
         userEmail: currentUser.email || userProfile.email || '',
         amount,
-        methodDetails: {
-          methodName: methodName || (accountInfo.includes('@') ? 'UPI' : 'Bank Transfer'),
-          accountInfo: accountInfo.trim(),
-        },
+        paymentMethod: methodName || (accountInfo.includes('@') ? 'UPI' : 'Bank Transfer'),
+        paymentDetails: accountInfo.trim(),
         status: 'pending',
-        requestTimestamp: Date.now(),
+        requestedAt: Date.now(),
+        createdAt: Date.now(),
       };
 
       await set(newWithdrawalRef, withdrawalData);
@@ -642,6 +933,7 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         message: `Your withdrawal request of ₹${amount.toFixed(2)} to ${accountInfo.trim()} is pending admin processing.`,
         type: 'withdrawal',
         timestamp: Date.now(),
+        createdAt: Date.now(),
       });
 
       return { 
@@ -688,8 +980,10 @@ export const TournamentProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         setStatusTab,
         joinTournament,
         createDepositRequest,
+        createApiPayment,
         createWithdrawalRequest,
         markNotificationsAsRead,
+        activePendingApiDeposit,
       }}
     >
       {children}

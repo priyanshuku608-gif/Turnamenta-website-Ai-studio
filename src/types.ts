@@ -1,148 +1,271 @@
-export interface UserProfile {
-  uid: string;
-  displayName?: string;
-  email?: string;
-  photoURL?: string;
-  depositBalance?: number;
-  winningCash?: number;
-  bonusCash?: number;
-  balance?: number; // legacy/admin field
-  totalMatches?: number;
-  wonMatches?: number;
-  totalEarnings?: number;
-  referralEarnings?: number;
-  referralCode?: string;
-  referredBy?: string;
-  referralPromptComplete?: boolean;
-  joinedTournaments?: Record<string, boolean>;
-  username?: string;
-  gameUid?: string;
-  isAdmin?: boolean;
-  status?: string;
-  createdAt?: number | string;
-  lastLogin?: number | string;
-  lastCheckedNotifications?: number | string;
-  notifications?: Record<string, UserNotification>;
-}
+export type AdminTab =
+  | 'dashboard'
+  | 'games'
+  | 'promotions'
+  | 'tournaments'
+  | 'tournament-mgt'
+  | 'leaderboard-mgt'
+  | 'users'
+  | 'user-analytics'
+  | 'notifications'
+  | 'transactions'
+  | 'withdrawals'
+  | 'deposits'
+  | 'referrals'
+  | 'theme-customization'
+  | 'settings';
 
-export interface UserNotification {
-  id?: string;
-  title: string;
-  message: string;
-  type?: 'info' | 'success' | 'warning' | 'match_start' | 'deposit' | 'withdrawal';
-  timestamp: number | string;
-  read?: boolean;
-}
+export type TabType = 'home' | 'wallet' | 'leaderboard' | 'profile';
 
-export interface RegisteredPlayer {
-  joinedAt: number | string;
-  username: string;
-  gameUid: string;
-  teammateUsername?: string;
-  teammateGameUid?: string;
-}
-
-export interface Tournament {
-  id: string;
-  gameId?: string;
-  name: string;
-  startTime: string | number;
-  status: 'upcoming' | 'ongoing' | 'result' | 'completed' | 'cancelled';
-  entryFee: number;
-  prizePool: number;
-  perKillPrize: number;
-  maxPlayers: number;
-  mode: 'Solo' | 'Duo' | 'Squad' | string;
-  tags?: string[];
-  description?: string;
-  bannerUrl?: string;
-  roomId?: string;
-  roomPassword?: string;
-  showIdPass?: boolean;
-  prizeDistribution?: Record<string, number | string> | string;
-  registeredPlayers?: Record<string, RegisteredPlayer>;
-  createdAt?: number | string;
-  updatedAt?: number | string;
+export interface AdminConfig {
+  setupComplete: boolean;
+  adminUid: string;
+  adminEmail?: string;
+  adminName?: string;
+  createdAt?: number;
 }
 
 export interface Game {
   id: string;
   name: string;
   imageUrl?: string;
-  createdAt?: number | string;
+  createdAt?: number;
+  [key: string]: any;
 }
 
 export interface Promotion {
   id: string;
-  imageUrl?: string;
+  imageUrl: string;
   link?: string;
   title?: string;
-  createdAt?: number | string;
+  createdAt?: number;
+  [key: string]: any;
 }
 
-export interface Deposit {
-  id: string;
-  userId: string;
-  userEmail?: string;
-  userName?: string;
-  amount: number;
-  paymentMethod: string;
-  upiId?: string;
-  utr: string;
-  status: 'pending' | 'approved' | 'rejected' | 'success';
-  timestamp: number | string;
+export interface RegisteredPlayer {
+  userId?: string;
+  uid?: string;
+  inGameName?: string;
+  inGameId?: string;
+  email?: string;
+  displayName?: string;
+  joinedAt?: number;
+  slotNumber?: number;
+  [key: string]: any;
 }
 
-export interface Withdrawal {
+export interface Tournament {
+  id: string;
+  gameId: string;
+  name: string;
+  startTime: string;
+  status: 'upcoming' | 'ongoing' | 'result' | 'completed' | 'cancelled';
+  entryFee: number;
+  prizePool: number;
+  perKillPrize: number;
+  maxPlayers: number;
+  bannerUrl?: string;
+  mode?: string;
+  tags?: string[];
+  description?: string;
+  roomId?: string;
+  roomPassword?: string;
+  showIdPass?: boolean;
+  prizeDistribution?: any;
+  registeredPlayers?: Record<string, RegisteredPlayer> | RegisteredPlayer[];
+  createdAt?: number;
+  updatedAt?: number;
+  [key: string]: any;
+}
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName?: string;
+  username?: string;
+  gameUid?: string;
+  photoURL?: string;
+  balance: number;
+  depositBalance?: number;
+  winningCash: number;
+  bonusCash: number;
+  status: 'active' | 'blocked' | 'banned' | string;
+  referralCode?: string;
+  referredBy?: string;
+  referralPromptComplete?: boolean;
+  isAdmin?: boolean;
+  referralEarnings?: number;
+  totalEarnings?: number;
+  totalMatches?: number;
+  wonMatches?: number;
+  leaderboardRank?: number | null;
+  leaderboardDisplayEarnings?: number | null;
+  notifications?: any;
+  lastCheckedNotifications?: any;
+  createdAt?: number;
+  updatedAt?: number;
+  [key: string]: any;
+}
+
+export interface WithdrawalRequest {
   id: string;
   userId: string;
-  userName?: string;
-  userEmail?: string;
   amount: number;
-  methodDetails?: {
-    methodName?: string;
-    accountInfo?: string;
-  };
-  status: 'pending' | 'completed' | 'approved' | 'rejected';
-  requestTimestamp: number | string;
+  paymentMethod?: string;
+  method?: string;
+  paymentDetails?: string;
+  accountDetails?: string;
+  status: 'pending' | 'completed' | 'rejected';
+  requestedAt?: number;
+  createdAt?: number;
+  processedAt?: number;
+  processedBy?: string;
+  adminNote?: string;
+  rejectReason?: string;
+  rejectionReason?: string;
+  userEmail?: string;
+  userName?: string;
+  [key: string]: any;
 }
+
+export type Withdrawal = WithdrawalRequest;
+
+export interface DepositRequest {
+  id: string;
+  userId: string;
+  amount: number;
+  type?: 'manual' | 'api' | string;
+  uniqueid?: string;
+  transactionid?: string;
+  transactionId?: string;
+  payment_url?: string;
+  created_at?: string;
+  expires_at?: string;
+  provider_transaction_id?: string;
+  updated_at?: string;
+  walletCredited?: boolean;
+  utr?: string;
+  utrNumber?: string;
+  paymentRef?: string;
+  paymentMethod?: string;
+  screenshotUrl?: string;
+  status: 'pending' | 'completed' | 'rejected' | 'success' | 'expired' | string;
+  submittedAt?: number;
+  createdAt?: number;
+  processedAt?: number;
+  processedBy?: string;
+  adminNote?: string;
+  rejectReason?: string;
+  rejectionReason?: string;
+  userEmail?: string;
+  userName?: string;
+  [key: string]: any;
+}
+
+export type Deposit = DepositRequest;
+
+export interface PendingReferral {
+  id: string;
+  referrerUid: string;
+  referrerEmail?: string;
+  referredUid: string;
+  referredEmail?: string;
+  referralCode?: string;
+  status: 'pending' | 'completed' | 'credited' | 'rejected';
+  amount?: number;
+  bonusAmount?: number;
+  createdAt?: number;
+  timestamp?: number;
+  creditedAt?: number;
+  processedAt?: number;
+  processedBy?: string;
+  [key: string]: any;
+}
+
+export type ReferralRecord = PendingReferral;
 
 export interface TransactionRecord {
   id: string;
+  userId: string;
+  userEmail?: string;
   type: string;
   amount: number;
-  timestamp: number | string;
-  description?: string;
+  isCredit?: boolean;
   status: string;
+  description: string;
+  timestamp: number;
   balanceAfter?: number;
   adminUid?: string;
+  metadata?: Record<string, any>;
+  [key: string]: any;
 }
+
+export type Transaction = TransactionRecord;
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  type?: 'info' | 'announcement' | 'alert' | 'reward' | string;
+  createdAt: number;
+  sentBy?: string;
+  [key: string]: any;
+}
+
+export type UserNotification = NotificationItem;
+
+export interface LeaderboardItem {
+  uid: string;
+  displayName: string;
+  email?: string;
+  earnings: number;
+  rank?: number;
+  [key: string]: any;
+}
+
+export interface ThemeConfig {
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  backgroundColor?: string;
+  surfaceColor?: string;
+  textColor?: string;
+  enableShineEffect?: boolean;
+  enableParticles?: boolean;
+  glowIntensity?: number;
+  [key: string]: any;
+}
+
+export type AppThemeSettings = ThemeConfig;
 
 export interface AppSettings {
   appName?: string;
   logoUrl?: string;
   minWithdraw?: number;
+  minWithdrawal?: number;
+  maxWithdrawal?: number;
+  minDeposit?: number;
   referralBonus?: number;
   signupBonus?: number;
+  appVersion?: string;
+  supportEmail?: string;
   supportContact?: string;
   telegramLink?: string;
-  upiDetails?: string;
+  telegramChannel?: string;
+  whatsappNumber?: string;
+  maintenanceMode?: boolean;
+  maintenanceMessage?: string;
+  upiId?: string;
   qrCodeUrl?: string;
-  policyPrivacy?: string;
-  policyTerms?: string;
-  policyRefund?: string;
-  policyFairPlay?: string;
-  lastUpdated?: number | string;
+  upiDetails?: {
+    upiId?: string;
+    qrCodeUrl?: string;
+    accountName?: string;
+  };
+  privacyPolicy?: string;
+  termsConditions?: string;
+  refundPolicy?: string;
+  fairPlayPolicy?: string;
+  theme?: ThemeConfig;
+  [key: string]: any;
 }
-
-export interface LeaderboardItem {
-  uid: string;
-  displayName: string;
-  totalEarnings: number;
-  wonMatches?: number;
-  totalMatches?: number;
-  photoURL?: string;
-  rank?: number;
-}
-
-export type TabType = 'home' | 'wallet' | 'leaderboard' | 'profile';

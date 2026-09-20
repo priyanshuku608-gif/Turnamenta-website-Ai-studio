@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Sparkles, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
+import { Sparkles, ExternalLink } from 'lucide-react';
 import { Promotion } from '../../types';
 
 interface PromotionSliderProps {
@@ -45,7 +45,7 @@ export const PromotionSlider: React.FC<PromotionSliderProps> = ({ promotions }) 
     }, 3500);
   }, []);
 
-  // Autoplay Effect (3.5s interval)
+  // Autoplay Effect (3.5s interval, loop)
   useEffect(() => {
     if (validPromos.length <= 1 || isPaused) {
       return;
@@ -67,7 +67,7 @@ export const PromotionSlider: React.FC<PromotionSliderProps> = ({ promotions }) 
     };
   }, []);
 
-  // Touch Swipe Handlers
+  // Touch Swipe Handlers (Preserves manual swipe left/right)
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartXRef.current = e.touches[0].clientX;
     touchDeltaXRef.current = 0;
@@ -131,10 +131,10 @@ export const PromotionSlider: React.FC<PromotionSliderProps> = ({ promotions }) 
     );
   }
 
-  // 2. Real Promotions Slider (1 or more slides)
+  // 2. Real Promotions Slider (Arrows and dots removed completely, swipe and autoplay active)
   return (
     <div
-      className="relative w-full aspect-[2/1] sm:aspect-[21/9] rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#0F172A] group"
+      className="relative w-full aspect-[2/1] sm:aspect-[21/9] rounded-2xl overflow-hidden border border-slate-700/80 shadow-2xl bg-[#0F172A] select-none"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -165,8 +165,8 @@ export const PromotionSlider: React.FC<PromotionSliderProps> = ({ promotions }) 
 
             {/* Title / Link Badge if available */}
             {promo.title && (
-              <div className="absolute bottom-3 left-3 right-12 z-10">
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-black/70 text-[#B6FF3C] border border-[#B6FF3C]/30 inline-flex items-center gap-1 backdrop-blur-sm truncate max-w-full">
+              <div className="absolute bottom-3 left-3 right-3 z-10">
+                <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-black/75 text-[#B6FF3C] border border-[#B6FF3C]/30 inline-flex items-center gap-1 backdrop-blur-sm truncate max-w-full shadow-md">
                   {promo.title}
                   {promo.link && <ExternalLink className="w-2.5 h-2.5 shrink-0" />}
                 </span>
@@ -178,58 +178,6 @@ export const PromotionSlider: React.FC<PromotionSliderProps> = ({ promotions }) 
 
       {/* Lightweight CSS Shimmer / Shine Highlight Sweep */}
       <div className="banner-shimmer-sweep" />
-
-      {/* Left/Right Navigation Arrows (Only when >1 slide) */}
-      {validPromos.length > 1 && (
-        <>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handlePrev();
-              triggerUserInteractionPause();
-            }}
-            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 border border-slate-700/80 text-white flex items-center justify-center transition active:scale-95 opacity-70 hover:opacity-100"
-            aria-label="Previous Slide"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleNext();
-              triggerUserInteractionPause();
-            }}
-            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 border border-slate-700/80 text-white flex items-center justify-center transition active:scale-95 opacity-70 hover:opacity-100"
-            aria-label="Next Slide"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
-
-          {/* Indicator Dots */}
-          <div className="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/50 backdrop-blur-sm border border-slate-800/80">
-            {validPromos.map((_, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCurrentIndex(i);
-                  triggerUserInteractionPause();
-                }}
-                className={`transition-all duration-300 rounded-full ${
-                  currentIndex === i
-                    ? 'w-4 h-1.5 bg-[#B6FF3C] shadow-[0_0_8px_#B6FF3C]'
-                    : 'w-1.5 h-1.5 bg-slate-500 hover:bg-slate-300'
-                }`}
-                aria-label={`Go to slide ${i + 1}`}
-              />
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 };

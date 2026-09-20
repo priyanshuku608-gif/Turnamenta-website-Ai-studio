@@ -21,7 +21,12 @@ export const MatchHistoryModal: React.FC<MatchHistoryModalProps> = ({
   if (!isOpen) return null;
 
   const joinedMatches = tournaments.filter(
-    (t) => currentUser && t.registeredPlayers && !!t.registeredPlayers[currentUser.uid]
+    (t) =>
+      currentUser &&
+      t.registeredPlayers &&
+      (Array.isArray(t.registeredPlayers)
+        ? t.registeredPlayers.some((p: any) => p?.uid === currentUser.uid || p?.userId === currentUser.uid)
+        : !!(t.registeredPlayers as Record<string, any>)[currentUser.uid])
   );
 
   const formatStartTime = (st: string | number) => {
